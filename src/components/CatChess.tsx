@@ -7,10 +7,26 @@ import {
   squareName,
   undoMove,
   type GameState,
+  type Piece,
+  type PieceType,
+  type Color,
 } from "@/lib/chess";
 import { PIECE_IMG, PIECE_NAME } from "@/lib/pieceImages";
 
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
+
+type CatTheme = "classic" | "swapped";
+
+/**
+ * Resolve which figurine artwork to display for a piece. The chess color
+ * (turn order) is unchanged — only the artwork swaps.
+ *  - classic: white side → cream art, black side → black art
+ *  - swapped: white side → black art, black side → cream art
+ */
+function pieceArt(theme: CatTheme, color: Color, type: PieceType): string {
+  const artColor: Color = theme === "classic" ? color : color === "w" ? "b" : "w";
+  return PIECE_IMG[artColor][type];
+}
 
 function playBeep(type: "move" | "capture" | "meow") {
   try {
@@ -36,7 +52,6 @@ function playBeep(type: "move" | "capture" | "meow") {
       o.start();
       o.stop(ctx.currentTime + 0.23);
     } else {
-      // meow: pitch slide
       o.type = "sine";
       o.frequency.setValueAtTime(700, ctx.currentTime);
       o.frequency.linearRampToValueAtTime(450, ctx.currentTime + 0.18);
@@ -57,12 +72,27 @@ function fmtTime(s: number) {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
+interface CaptureFx {
+  id: number;
+  row: number;
+  col: number;
+  piece: Piece;
+}
+
 export function CatChess() {
   const [state, setState] = useState<GameState>(() => newGame());
   const [selected, setSelected] = useState<[number, number] | null>(null);
   const [soundOn, setSoundOn] = useState(true);
   const [whiteTime, setWhiteTime] = useState(600);
   const [blackTime, setBlackTime] = useState(600);
+  const [theme, setTheme] = useState<CatTheme>("classic");
+  const [pendingPromo, setPendingPromo] = useState<{
+    from: [number, number];
+    to: [number, number];
+    color: Color;
+  } | null>(null);
+  const [captureFx, setCaptureFx] = useState<CaptureFx[]>([]);
+  const fxIdRef = useRef(0);
   const startedRef = useRef(false);
 
   const targets = useMemo(() => {
@@ -70,7 +100,8 @@ export function CatChess() {
     return legalMoves(state, selected[0], selected[1]);
   }, [selected, state]);
 
-  // timer
+  const lastMove = state.history[state.history.length - 1] ?? null;
+
   useEffect(() => {
     if (state.status === "checkmate" || state.status === "stalemate") return;
     if (!startedRef.current) return;
@@ -81,8 +112,33 @@ export function CatChess() {
     return () => window.clearInterval(id);
   }, [state.turn, state.status]);
 
+  function commitMove(
+    from: [number, number],
+    to: [number, number],
+    promotion: PieceType = "q",
+  ) {
+    const captured = state.board[to[0]][to[1]];
+    const next = applyMove(state, from, to, promotion);
+    startedRef.current = true;
+    if (captured) {
+      const id = ++fxIdRef.current;
+      const fx: CaptureFx = { id, row: to[0], col: to[1], piece: captured };
+      setCaptureFx((arr) => [...arr, fx]);
+      window.setTimeout(() => {
+        setCaptureFx((arr) => arr.filter((f) => f.id !== id));
+      }, 500);
+    }
+    setState(next);
+    setSelected(null);
+    if (soundOn) playBeep(captured ? "capture" : "move");
+    if (soundOn && (next.status === "check" || next.status === "checkmate")) {
+      setTimeout(() => playBeep("meow"), 150);
+    }
+  }
+
   function handleSquareClick(r: number, c: number) {
     if (state.status === "checkmate" || state.status === "stalemate") return;
+    if (pendingPromo) return;
     const piece = state.board[r][c];
     if (selected) {
       if (selected[0] === r && selected[1] === c) {
@@ -91,15 +147,13 @@ export function CatChess() {
       }
       const isTarget = targets.some(([tr, tc]) => tr === r && tc === c);
       if (isTarget) {
-        const captured = state.board[r][c];
-        const next = applyMove(state, selected, [r, c]);
-        startedRef.current = true;
-        setState(next);
-        setSelected(null);
-        if (soundOn) playBeep(captured ? "capture" : "move");
-        if (soundOn && (next.status === "check" || next.status === "checkmate")) {
-          setTimeout(() => playBeep("meow"), 150);
+        const moving = state.board[selected[0]][selected[1]]!;
+        const isPromotion = moving.type === "p" && (r === 0 || r === 7);
+        if (isPromotion) {
+          setPendingPromo({ from: selected, to: [r, c], color: moving.color });
+          return;
         }
+        commitMove(selected, [r, c]);
         return;
       }
       if (piece && piece.color === state.turn) {
@@ -117,12 +171,15 @@ export function CatChess() {
     setSelected(null);
     setWhiteTime(600);
     setBlackTime(600);
+    setPendingPromo(null);
+    setCaptureFx([]);
     startedRef.current = false;
   }
 
   function undo() {
     setState((s) => undoMove(s));
     setSelected(null);
+    setPendingPromo(null);
   }
 
   const capturedByWhite = state.captured.filter((p) => p.color === "b");
@@ -140,9 +197,8 @@ export function CatChess() {
   return (
     <div className="min-h-screen bg-cream text-foreground">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 lg:flex-row lg:py-10">
-        {/* Board */}
         <div className="flex-1">
-          <header className="mb-4 flex items-end justify-between">
+          <header className="mb-4 flex items-end justify-between gap-4">
             <div>
               <h1 className="font-display text-3xl font-extrabold tracking-tight text-paw lg:text-4xl">
                 🐾 Cat Chess
@@ -151,11 +207,11 @@ export function CatChess() {
                 Standard chess. Adorable cats. Click a piece, then click where to move.
               </p>
             </div>
+            <ThemeToggle theme={theme} setTheme={setTheme} />
           </header>
 
           <div className="rounded-2xl bg-board-frame p-3 shadow-paw ring-1 ring-board-frame/60">
             <div className="grid grid-cols-[1.25rem_repeat(8,1fr)] grid-rows-[repeat(8,1fr)_1.25rem] gap-0">
-              {/* board rows + rank labels */}
               {Array.from({ length: 8 }).map((_, r) => (
                 <FragmentRow
                   key={r}
@@ -164,9 +220,12 @@ export function CatChess() {
                   selected={selected}
                   targets={targets}
                   onClick={handleSquareClick}
+                  theme={theme}
+                  lastMove={lastMove ? { from: lastMove.from, to: lastMove.to } : null}
+                  moveCount={state.history.length}
+                  captureFx={captureFx}
                 />
               ))}
-              {/* file labels row */}
               <div />
               {FILES.map((f) => (
                 <div
@@ -184,7 +243,6 @@ export function CatChess() {
           </div>
         </div>
 
-        {/* Sidebar */}
         <aside className="w-full shrink-0 space-y-4 lg:w-80">
           <div className="grid grid-cols-2 gap-3">
             <TimerCard label="White" time={whiteTime} active={state.turn === "w"} />
@@ -195,8 +253,8 @@ export function CatChess() {
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Captured
             </div>
-            <CapturedRow label="By White" pieces={capturedByWhite} />
-            <CapturedRow label="By Black" pieces={capturedByBlack} />
+            <CapturedRow label="By White" pieces={capturedByWhite} theme={theme} />
+            <CapturedRow label="By Black" pieces={capturedByBlack} theme={theme} />
           </div>
 
           <div className="flex gap-2">
@@ -252,6 +310,19 @@ export function CatChess() {
           </div>
         </aside>
       </div>
+
+      {pendingPromo && (
+        <PromotionPicker
+          color={pendingPromo.color}
+          theme={theme}
+          onChoose={(type) => {
+            const { from, to } = pendingPromo;
+            setPendingPromo(null);
+            commitMove(from, to, type);
+          }}
+          onCancel={() => setPendingPromo(null)}
+        />
+      )}
     </div>
   );
 }
@@ -262,12 +333,20 @@ function FragmentRow({
   selected,
   targets,
   onClick,
+  theme,
+  lastMove,
+  moveCount,
+  captureFx,
 }: {
   row: number;
   state: GameState;
   selected: [number, number] | null;
   targets: [number, number][];
   onClick: (r: number, c: number) => void;
+  theme: CatTheme;
+  lastMove: { from: [number, number]; to: [number, number] } | null;
+  moveCount: number;
+  captureFx: CaptureFx[];
 }) {
   return (
     <>
@@ -280,6 +359,9 @@ function FragmentRow({
         const isSelected = !!selected && selected[0] === row && selected[1] === col;
         const isTarget = targets.some(([r, c]) => r === row && c === col);
         const isCapture = isTarget && !!piece;
+        const isLastFrom = !!lastMove && lastMove.from[0] === row && lastMove.from[1] === col;
+        const isLastTo = !!lastMove && lastMove.to[0] === row && lastMove.to[1] === col;
+        const fx = captureFx.find((f) => f.row === row && f.col === col);
         return (
           <button
             key={col}
@@ -289,14 +371,33 @@ function FragmentRow({
               "relative aspect-square w-full transition-colors",
               isLight ? "bg-board-light" : "bg-board-dark",
               isSelected ? "ring-4 ring-inset ring-paw/80" : "",
+              isLastFrom || isLastTo ? "shadow-[inset_0_0_0_3px_oklch(0.66_0.18_25/0.55)]" : "",
             ].join(" ")}
           >
+            {(isLastFrom || isLastTo) && (
+              <span
+                key={`trail-${moveCount}-${isLastTo ? "t" : "f"}`}
+                className="cat-trail pointer-events-none absolute inset-0 bg-paw/25"
+              />
+            )}
             {piece && (
               <img
-                src={PIECE_IMG[piece.color][piece.type]}
+                key={`p-${moveCount}-${isLastTo ? "to" : "x"}`}
+                src={pieceArt(theme, piece.color, piece.type)}
                 alt={`${piece.color === "w" ? "White" : "Black"} ${PIECE_NAME[piece.type]}`}
                 draggable={false}
-                className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain p-[6%] drop-shadow-sm"
+                className={[
+                  "pointer-events-none absolute inset-0 h-full w-full select-none object-contain p-[6%] drop-shadow-sm",
+                  isLastTo ? "cat-pop" : "",
+                ].join(" ")}
+              />
+            )}
+            {fx && (
+              <img
+                key={`fx-${fx.id}`}
+                src={pieceArt(theme, fx.piece.color, fx.piece.type)}
+                alt=""
+                className="cat-capture-fx pointer-events-none absolute inset-0 h-full w-full select-none object-contain p-[6%]"
               />
             )}
             {isTarget && !isCapture && (
@@ -342,9 +443,11 @@ function TimerCard({
 function CapturedRow({
   label,
   pieces,
+  theme,
 }: {
   label: string;
-  pieces: { type: import("@/lib/chess").PieceType; color: import("@/lib/chess").Color }[];
+  pieces: { type: PieceType; color: Color }[];
+  theme: CatTheme;
 }) {
   return (
     <div className="mb-2 last:mb-0">
@@ -354,11 +457,95 @@ function CapturedRow({
         {pieces.map((p, i) => (
           <img
             key={i}
-            src={PIECE_IMG[p.color][p.type]}
+            src={pieceArt(theme, p.color, p.type)}
             alt=""
             className="h-7 w-7 object-contain"
           />
         ))}
+      </div>
+    </div>
+  );
+}
+
+function ThemeToggle({
+  theme,
+  setTheme,
+}: {
+  theme: CatTheme;
+  setTheme: (t: CatTheme) => void;
+}) {
+  return (
+    <div className="inline-flex items-center gap-1 rounded-full bg-card p-1 shadow-sm ring-1 ring-border">
+      <button
+        onClick={() => setTheme("classic")}
+        className={[
+          "rounded-full px-3 py-1 text-xs font-semibold transition",
+          theme === "classic"
+            ? "bg-paw text-paw-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground",
+        ].join(" ")}
+        title="Cream cats for White, black cats for Black"
+      >
+        🐱 Cream
+      </button>
+      <button
+        onClick={() => setTheme("swapped")}
+        className={[
+          "rounded-full px-3 py-1 text-xs font-semibold transition",
+          theme === "swapped"
+            ? "bg-paw text-paw-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground",
+        ].join(" ")}
+        title="Black cats for White, cream cats for Black"
+      >
+        🐈‍⬛ Black
+      </button>
+    </div>
+  );
+}
+
+function PromotionPicker({
+  color,
+  theme,
+  onChoose,
+  onCancel,
+}: {
+  color: Color;
+  theme: CatTheme;
+  onChoose: (type: PieceType) => void;
+  onCancel: () => void;
+}) {
+  const options: PieceType[] = ["q", "r", "b", "n"];
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
+      onClick={onCancel}
+    >
+      <div
+        className="rounded-2xl bg-card p-5 shadow-2xl ring-1 ring-border animate-scale-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 text-center">
+          <div className="font-display text-lg font-bold text-paw">Promote your kitten! 👑</div>
+          <div className="text-xs text-muted-foreground">Pick which cat to crown.</div>
+        </div>
+        <div className="grid grid-cols-4 gap-2">
+          {options.map((t) => (
+            <button
+              key={t}
+              onClick={() => onChoose(t)}
+              className="group flex w-20 flex-col items-center gap-1 rounded-xl bg-board-light/60 p-2 ring-1 ring-border transition hover:bg-paw/15 hover:ring-paw/60"
+            >
+              <img
+                src={pieceArt(theme, color, t)}
+                alt={PIECE_NAME[t]}
+                className="h-16 w-16 object-contain transition-transform group-hover:scale-110"
+                draggable={false}
+              />
+              <span className="text-[0.7rem] font-semibold">{PIECE_NAME[t]}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
