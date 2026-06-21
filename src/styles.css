@@ -74,6 +74,24 @@
   --font-display: "Fredoka", "Quicksand", system-ui, sans-serif;
 }
 
+@keyframes cat-pop {
+  0% { transform: scale(0.55); opacity: 0; }
+  55% { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes cat-capture {
+  0% { transform: scale(1) rotate(0deg); opacity: 1; }
+  60% { transform: scale(1.35) rotate(-12deg); opacity: 0.7; }
+  100% { transform: scale(0.2) rotate(25deg); opacity: 0; }
+}
+@keyframes cat-trail {
+  0% { opacity: 0.55; }
+  100% { opacity: 0; }
+}
+.cat-pop { animation: cat-pop 0.28s cubic-bezier(.34,1.56,.64,1) both; }
+.cat-capture-fx { animation: cat-capture 0.45s ease-in both; }
+.cat-trail { animation: cat-trail 0.9s ease-out both; }
+
 :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0);

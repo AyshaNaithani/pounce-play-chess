@@ -189,7 +189,12 @@ function cloneBoard(b: Board): Board {
   return b.map((row) => row.slice());
 }
 
-export function applyMove(state: GameState, from: [number, number], to: [number, number]): GameState {
+export function applyMove(
+  state: GameState,
+  from: [number, number],
+  to: [number, number],
+  promotion: PieceType = "q",
+): GameState {
   const board = cloneBoard(state.board);
   const piece = board[from[0]][from[1]]!;
   const captured = board[to[0]][to[1]];
@@ -197,8 +202,9 @@ export function applyMove(state: GameState, from: [number, number], to: [number,
   board[from[0]][from[1]] = null;
   let promoted: PieceType | undefined;
   if (piece.type === "p" && (to[0] === 0 || to[0] === 7)) {
-    board[to[0]][to[1]] = { type: "q", color: piece.color };
-    promoted = "q";
+    const promoType: PieceType = promotion === "r" || promotion === "b" || promotion === "n" ? promotion : "q";
+    board[to[0]][to[1]] = { type: promoType, color: piece.color };
+    promoted = promoType;
   }
   const move: Move = { from, to, piece, captured, promoted };
   const nextTurn: Color = state.turn === "w" ? "b" : "w";
@@ -242,7 +248,7 @@ export function undoMove(state: GameState): GameState {
   // rebuild from scratch (simple + safe)
   let s = newGame();
   for (const m of history) {
-    s = applyMove(s, m.from, m.to);
+    s = applyMove(s, m.from, m.to, m.promoted ?? "q");
   }
   return s;
 }
@@ -255,5 +261,5 @@ export function moveToSAN(m: Move): string {
   const pieceLetter = m.piece.type === "p" ? "" : m.piece.type.toUpperCase();
   const capture = m.captured ? "x" : "";
   const from = m.piece.type === "p" && m.captured ? "abcdefgh"[m.from[1]] : "";
-  return `${pieceLetter}${from}${capture}${squareName(m.to[0], m.to[1])}${m.promoted ? "=Q" : ""}`;
+  return `${pieceLetter}${from}${capture}${squareName(m.to[0], m.to[1])}${m.promoted ? `=${m.promoted.toUpperCase()}` : ""}`;
 }
