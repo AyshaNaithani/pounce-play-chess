@@ -578,3 +578,53 @@ function PromotionPicker({
     </div>
   );
 }
+
+function DifficultySelect({
+  value,
+  onChange,
+}: {
+  value: Difficulty;
+  onChange: (d: Difficulty) => void;
+}) {
+  const opts: { id: Difficulty; label: string; hint: string }[] = [
+    { id: "off", label: "2 Players", hint: "No AI" },
+    { id: "easy", label: "Kitten", hint: "Random" },
+    { id: "medium", label: "Cat", hint: "Greedy" },
+    { id: "hard", label: "Tiger", hint: "Depth 3" },
+  ];
+  return (
+    <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-border">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Opponent
+        </div>
+        {value !== "off" && (
+          <span className="text-[0.65rem] font-semibold text-paw">AI plays Black</span>
+        )}
+      </div>
+      <div className="grid grid-cols-4 gap-1.5">
+        {opts.map((o) => {
+          const active = value === o.id;
+          return (
+            <button
+              key={o.id}
+              onClick={() => onChange(o.id)}
+              title={o.hint}
+              className={[
+                "flex flex-col items-center rounded-lg px-1 py-2 text-[0.7rem] font-semibold transition",
+                active
+                  ? "bg-paw text-paw-foreground shadow-sm"
+                  : "bg-secondary text-secondary-foreground hover:bg-accent",
+              ].join(" ")}
+            >
+              <span>{o.label}</span>
+              <span className={["text-[0.6rem] font-normal", active ? "opacity-90" : "opacity-60"].join(" ")}>
+                {o.hint}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
