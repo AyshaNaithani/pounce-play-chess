@@ -44,43 +44,49 @@ function allLegalMoves(state: GameState): AIMove[] {
   return moves;
 }
 
-function negamax(
+function minimax(
   state: GameState,
   depth: number,
   alpha: number,
   beta: number,
   perspective: Color,
 ): number {
-  if (depth === 0 || state.status === "checkmate" || state.status === "stalemate") {
-    if (state.status === "checkmate") {
-      // side to move is mated → very bad for them
-      return state.turn === perspective ? -100000 : 100000;
-    }
-    if (state.status === "stalemate") return 0;
-    return evaluate(state, perspective);
+  if (state.status === "checkmate") {
+    return state.turn === perspective ? -100000 - depth : 100000 + depth;
   }
+  if (state.status === "stalemate") return 0;
+  if (depth === 0) return evaluate(state, perspective);
+
+  const maximizing = state.turn === perspective;
   const moves = allLegalMoves(state);
-  if (moves.length === 0) {
-    if (!anyLegalMove(state)) return 0;
-  }
-  // order: captures first
+  if (moves.length === 0) return evaluate(state, perspective);
   moves.sort((a, b) => {
     const ca = state.board[a.to[0]][a.to[1]] ? VALUE[state.board[a.to[0]][a.to[1]]!.type] : 0;
     const cb = state.board[b.to[0]][b.to[1]] ? VALUE[state.board[b.to[0]][b.to[1]]!.type] : 0;
     return cb - ca;
   });
-  let best = -Infinity;
-  const sideMult = state.turn === perspective ? 1 : -1;
-  for (const m of moves) {
-    const next = applyMove(state, m.from, m.to, m.promotion);
-    const score = sideMult * -negamax(next, depth - 1, -beta, -alpha, perspective) * sideMult;
-    // simpler: evaluate from perspective directly
-    const adj = state.turn === perspective ? score : -score;
-    if (adj > best) best = adj;
-    if (best > alpha) alpha = best;
-    if (alpha >= beta) break;
+
+  if (maximizing) {
+    let best = -Infinity;
+    for (const m of moves) {
+      const next = applyMove(state, m.from, m.to, m.promotion);
+      const s = minimax(next, depth - 1, alpha, beta, perspective);
+      if (s > best) best = s;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break;
+    }
+    return best;
+  } else {
+    let best = Infinity;
+    for (const m of moves) {
+      const next = applyMove(state, m.from, m.to, m.promotion);
+      const s = minimax(next, depth - 1, alpha, beta, perspective);
+      if (s < best) best = s;
+      if (best < beta) beta = best;
+      if (alpha >= beta) break;
+    }
+    return best;
   }
-  return best === -Infinity ? evaluate(state, perspective) : best;
 }
 
 /** Choose an AI move for state.turn. Returns null if no legal move. */
@@ -117,7 +123,6 @@ export function chooseAIMove(state: GameState, difficulty: Difficulty): AIMove |
   const depth = 3;
   let best = -Infinity;
   let bestMove: AIMove = moves[0];
-  // order moves
   moves.sort((a, b) => {
     const ca = state.board[a.to[0]][a.to[1]] ? VALUE[state.board[a.to[0]][a.to[1]]!.type] : 0;
     const cb = state.board[b.to[0]][b.to[1]] ? VALUE[state.board[b.to[0]][b.to[1]]!.type] : 0;
@@ -127,7 +132,7 @@ export function chooseAIMove(state: GameState, difficulty: Difficulty): AIMove |
   const beta = Infinity;
   for (const m of moves) {
     const next = applyMove(state, m.from, m.to, m.promotion);
-    const score = negamax(next, depth - 1, alpha, beta, perspective);
+    const score = minimax(next, depth - 1, alpha, beta, perspective);
     if (score > best) {
       best = score;
       bestMove = m;
