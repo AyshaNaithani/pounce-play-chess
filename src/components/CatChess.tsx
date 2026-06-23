@@ -12,6 +12,7 @@ import {
   type Color,
 } from "@/lib/chess";
 import { PIECE_IMG, PIECE_NAME } from "@/lib/pieceImages";
+import { chooseAIMove, type Difficulty } from "@/lib/ai";
 
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
@@ -86,6 +87,10 @@ export function CatChess() {
   const [whiteTime, setWhiteTime] = useState(600);
   const [blackTime, setBlackTime] = useState(600);
   const [theme, setTheme] = useState<CatTheme>("classic");
+  const [difficulty, setDifficulty] = useState<Difficulty>("off");
+  const [aiThinking, setAiThinking] = useState(false);
+  // AI plays Black when enabled.
+  const aiColor: Color = "b";
   const [pendingPromo, setPendingPromo] = useState<{
     from: [number, number];
     to: [number, number];
@@ -101,6 +106,27 @@ export function CatChess() {
   }, [selected, state]);
 
   const lastMove = state.history[state.history.length - 1] ?? null;
+
+  // AI move trigger
+  useEffect(() => {
+    if (difficulty === "off") return;
+    if (state.turn !== aiColor) return;
+    if (state.status === "checkmate" || state.status === "stalemate") return;
+    if (pendingPromo) return;
+    setAiThinking(true);
+    // Defer so UI can paint the user's move first.
+    const handle = window.setTimeout(() => {
+      const choice = chooseAIMove(state, difficulty);
+      setAiThinking(false);
+      if (!choice) return;
+      commitMove(choice.from, choice.to, choice.promotion);
+    }, 350);
+    return () => {
+      window.clearTimeout(handle);
+      setAiThinking(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, difficulty]);
 
   useEffect(() => {
     if (state.status === "checkmate" || state.status === "stalemate") return;
@@ -139,6 +165,7 @@ export function CatChess() {
   function handleSquareClick(r: number, c: number) {
     if (state.status === "checkmate" || state.status === "stalemate") return;
     if (pendingPromo) return;
+    if (difficulty !== "off" && state.turn === aiColor) return;
     const piece = state.board[r][c];
     if (selected) {
       if (selected[0] === r && selected[1] === c) {
@@ -239,11 +266,12 @@ export function CatChess() {
           </div>
 
           <div className="mt-3 rounded-xl bg-card px-4 py-3 text-center text-sm font-semibold shadow-sm ring-1 ring-border">
-            {statusText}
+            {aiThinking ? "🐈 Cat AI is thinking…" : statusText}
           </div>
         </div>
 
         <aside className="w-full shrink-0 space-y-4 lg:w-80">
+          <DifficultySelect value={difficulty} onChange={setDifficulty} />
           <div className="grid grid-cols-2 gap-3">
             <TimerCard label="White" time={whiteTime} active={state.turn === "w"} />
             <TimerCard label="Black" time={blackTime} active={state.turn === "b"} dark />
@@ -546,6 +574,56 @@ function PromotionPicker({
             </button>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DifficultySelect({
+  value,
+  onChange,
+}: {
+  value: Difficulty;
+  onChange: (d: Difficulty) => void;
+}) {
+  const opts: { id: Difficulty; label: string; hint: string }[] = [
+    { id: "off", label: "2 Players", hint: "No AI" },
+    { id: "easy", label: "Kitten", hint: "Random" },
+    { id: "medium", label: "Cat", hint: "Greedy" },
+    { id: "hard", label: "Tiger", hint: "Depth 3" },
+  ];
+  return (
+    <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-border">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Opponent
+        </div>
+        {value !== "off" && (
+          <span className="text-[0.65rem] font-semibold text-paw">AI plays Black</span>
+        )}
+      </div>
+      <div className="grid grid-cols-4 gap-1.5">
+        {opts.map((o) => {
+          const active = value === o.id;
+          return (
+            <button
+              key={o.id}
+              onClick={() => onChange(o.id)}
+              title={o.hint}
+              className={[
+                "flex flex-col items-center rounded-lg px-1 py-2 text-[0.7rem] font-semibold transition",
+                active
+                  ? "bg-paw text-paw-foreground shadow-sm"
+                  : "bg-secondary text-secondary-foreground hover:bg-accent",
+              ].join(" ")}
+            >
+              <span>{o.label}</span>
+              <span className={["text-[0.6rem] font-normal", active ? "opacity-90" : "opacity-60"].join(" ")}>
+                {o.hint}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
