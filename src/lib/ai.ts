@@ -1,4 +1,4 @@
-import { anyLegalMove, applyMove, legalMoves, type Color, type GameState, type PieceType } from "./chess";
+import { applyMove, legalMoves, type Color, type GameState, type PieceType } from "./chess";
 
 export type Difficulty = "off" | "easy" | "medium" | "hard";
 
