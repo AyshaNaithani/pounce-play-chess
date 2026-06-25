@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "audit:deps": "node scripts/audit-deps.mjs",
+    "prebuild": "node scripts/audit-deps.mjs",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
