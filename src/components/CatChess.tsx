@@ -18,6 +18,20 @@ const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
 type CatTheme = "classic" | "swapped";
 
+const THEME_KEY = "catChess.theme";
+const DIFFICULTY_KEY = "catChess.difficulty";
+
+function loadTheme(): CatTheme {
+  if (typeof window === "undefined") return "classic";
+  const v = window.localStorage.getItem(THEME_KEY);
+  return v === "swapped" || v === "classic" ? v : "classic";
+}
+function loadDifficulty(): Difficulty {
+  if (typeof window === "undefined") return "off";
+  const v = window.localStorage.getItem(DIFFICULTY_KEY);
+  return v === "off" || v === "easy" || v === "medium" || v === "hard" ? v : "off";
+}
+
 /**
  * Resolve which figurine artwork to display for a piece. The chess color
  * (turn order) is unchanged — only the artwork swaps.
@@ -86,8 +100,8 @@ export function CatChess() {
   const [soundOn, setSoundOn] = useState(true);
   const [whiteTime, setWhiteTime] = useState(600);
   const [blackTime, setBlackTime] = useState(600);
-  const [theme, setTheme] = useState<CatTheme>("classic");
-  const [difficulty, setDifficulty] = useState<Difficulty>("off");
+  const [theme, setTheme] = useState<CatTheme>(loadTheme);
+  const [difficulty, setDifficulty] = useState<Difficulty>(loadDifficulty);
   const [aiThinking, setAiThinking] = useState(false);
   // AI plays Black when enabled.
   const aiColor: Color = "b";
@@ -106,6 +120,14 @@ export function CatChess() {
   }, [selected, state]);
 
   const lastMove = state.history[state.history.length - 1] ?? null;
+
+  // Persist preferences.
+  useEffect(() => {
+    try { window.localStorage.setItem(THEME_KEY, theme); } catch { /* ignore */ }
+  }, [theme]);
+  useEffect(() => {
+    try { window.localStorage.setItem(DIFFICULTY_KEY, difficulty); } catch { /* ignore */ }
+  }, [difficulty]);
 
   // AI move trigger
   useEffect(() => {
