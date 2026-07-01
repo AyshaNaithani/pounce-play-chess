@@ -456,7 +456,7 @@ function FragmentRow({
                 draggable={false}
                 className={[
                   "pointer-events-none absolute inset-0 h-full w-full select-none object-contain p-[6%] drop-shadow-sm",
-                  isLastTo ? "cat-pop" : "cat-idle",
+                  isLastTo ? "cat-pop" : "",
                 ].join(" ")}
               />
             )}
