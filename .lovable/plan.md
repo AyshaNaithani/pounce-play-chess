@@ -1,25 +1,25 @@
-## Goals
-
-1. Confirm theme toggle instantly refreshes promotion picker + board artwork.
-2. Add a subtle idle animation to all cat pieces.
-3. Refine the move/capture pop to better suit the chibi art.
-4. Persist cat theme and AI difficulty in localStorage.
-
 ## Changes
 
-**src/components/CatChess.tsx**
-- Verify `PromotionPicker` reads `pieceArt(theme, ...)` from current `theme` state (not a captured prop) so it re-renders the instant the toggle flips. If not, lift the lookup inline.
-- Initialize `theme` and `difficulty` state from `localStorage` (with safe fallbacks: `"classic"` and `"off"`).
-- Add `useEffect`s to write `catChess.theme` and `catChess.difficulty` to `localStorage` whenever they change.
+### 1. Stop the idle bounce on pieces
+- In `src/styles.css`, remove the `cat-idle` keyframe animation (or make it a no-op) so pieces sit still on their squares.
+- Keep `cat-pop` (move landing) and `cat-capture-fx` (capture burst) intact — the user only asked to stop the constant idle motion, not the move feedback.
+- In `src/components/CatChess.tsx`, drop the `cat-idle` class from the piece `<img>` so nothing animates while pieces are resting.
 
-**src/styles.css**
-- Add `@keyframes cat-idle` — a very gentle 3s loop: ~1px vertical bob + ~1° rotation, easing in/out. Applied via `.cat-idle` to every piece image; paused on the actively-moving / captured piece so it doesn't fight the pop.
-- Tune existing `cat-pop`: slightly larger overshoot (scale 1.0 → 1.18 → 0.96 → 1.0) with a soft squash on Y to feel bouncy/chibi.
-- Tune `cat-capture`: quick puff — scale up to 1.3, rotate ~15°, fade with a slight blur, ~350ms.
-- Respect `prefers-reduced-motion`: disable idle + reduce pop to a simple fade.
+### 2. Add an explicit Game Mode selector
+Right now, mode is implicit: "2 Players" is hidden inside the difficulty buttons. Split it into two clear controls in the right sidebar of `src/components/CatChess.tsx`:
 
-**Verification**
-- Browser-check via Playwright: load `/`, toggle theme, open dev tools to confirm board + (forced) promotion picker swap art live; reload page and confirm theme + difficulty persist.
+- **Mode card** (new, above the current Opponent card):
+  - Two big pill buttons: `👥 Play with a Friend` and `🤖 Play vs Computer`.
+  - Selecting "Friend" forces difficulty to `off` and hides the difficulty picker.
+  - Selecting "Computer" restores the last chosen AI level (defaulting to `easy` if none), and reveals the difficulty picker.
+- **Difficulty card** (existing `DifficultySelect`, trimmed):
+  - Remove the `2 Players` option — mode now handles that.
+  - Keep `Kitten (easy) / Cat (medium) / Tiger (hard)` as the three difficulty levels, only shown in Computer mode.
+- Persist both `catChess.mode` and `catChess.difficulty` in localStorage so refresh keeps the user's setup.
+- AI still plays Black; status line still shows "Cat AI is thinking…" only in Computer mode.
 
-## Out of scope
-- Game logic, AI behavior, or new piece artwork.
+No changes to chess rules, board, timers, theme toggle, or captured/history panels.
+
+### Files touched
+- `src/components/CatChess.tsx` — remove idle class, add `ModeSelect`, adjust `DifficultySelect`, add mode state + localStorage.
+- `src/styles.css` — remove `cat-idle` keyframes/utility.

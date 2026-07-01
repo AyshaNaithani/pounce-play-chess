@@ -89,27 +89,11 @@
   0% { opacity: 0.55; }
   100% { opacity: 0; }
 }
-@keyframes cat-idle {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  25%      { transform: translateY(-1.5%) rotate(-0.8deg); }
-  50%      { transform: translateY(0) rotate(0deg); }
-  75%      { transform: translateY(-1%) rotate(0.8deg); }
-}
-@keyframes cat-blink {
-  0%, 92%, 100% { opacity: 1; }
-  95%, 97%      { opacity: 0.78; }
-}
 .cat-pop { animation: cat-pop 0.34s cubic-bezier(.34,1.56,.64,1) both; transform-origin: 50% 85%; }
 .cat-capture-fx { animation: cat-capture 0.45s ease-in both; transform-origin: 50% 85%; }
-.cat-idle {
-  animation: cat-idle 3.6s ease-in-out infinite, cat-blink 5.2s ease-in-out infinite;
-  transform-origin: 50% 85%;
-  will-change: transform, opacity;
-}
 .cat-trail { animation: cat-trail 0.9s ease-out both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .cat-idle { animation: none; }
   .cat-pop  { animation: cat-pop 0.15s ease-out both; }
   .cat-capture-fx { animation: cat-capture 0.25s ease-out both; }
 }

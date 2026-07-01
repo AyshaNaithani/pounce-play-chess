@@ -17,9 +17,11 @@ import { chooseAIMove, type Difficulty } from "@/lib/ai";
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
 type CatTheme = "classic" | "swapped";
+type GameMode = "friend" | "computer";
 
 const THEME_KEY = "catChess.theme";
 const DIFFICULTY_KEY = "catChess.difficulty";
+const MODE_KEY = "catChess.mode";
 
 function loadTheme(): CatTheme {
   if (typeof window === "undefined") return "classic";
@@ -30,6 +32,11 @@ function loadDifficulty(): Difficulty {
   if (typeof window === "undefined") return "off";
   const v = window.localStorage.getItem(DIFFICULTY_KEY);
   return v === "off" || v === "easy" || v === "medium" || v === "hard" ? v : "off";
+}
+function loadMode(): GameMode {
+  if (typeof window === "undefined") return "friend";
+  const v = window.localStorage.getItem(MODE_KEY);
+  return v === "computer" || v === "friend" ? v : "friend";
 }
 
 /**
@@ -101,7 +108,12 @@ export function CatChess() {
   const [whiteTime, setWhiteTime] = useState(600);
   const [blackTime, setBlackTime] = useState(600);
   const [theme, setTheme] = useState<CatTheme>(loadTheme);
-  const [difficulty, setDifficulty] = useState<Difficulty>(loadDifficulty);
+  const [mode, setMode] = useState<GameMode>(loadMode);
+  const [difficulty, setDifficulty] = useState<Difficulty>(() => {
+    const d = loadDifficulty();
+    return d === "off" ? "easy" : d;
+  });
+  const effectiveDifficulty: Difficulty = mode === "friend" ? "off" : difficulty;
   const [aiThinking, setAiThinking] = useState(false);
   // AI plays Black when enabled.
   const aiColor: Color = "b";
@@ -128,17 +140,20 @@ export function CatChess() {
   useEffect(() => {
     try { window.localStorage.setItem(DIFFICULTY_KEY, difficulty); } catch { /* ignore */ }
   }, [difficulty]);
+  useEffect(() => {
+    try { window.localStorage.setItem(MODE_KEY, mode); } catch { /* ignore */ }
+  }, [mode]);
 
   // AI move trigger
   useEffect(() => {
-    if (difficulty === "off") return;
+    if (effectiveDifficulty === "off") return;
     if (state.turn !== aiColor) return;
     if (state.status === "checkmate" || state.status === "stalemate") return;
     if (pendingPromo) return;
     setAiThinking(true);
     // Defer so UI can paint the user's move first.
     const handle = window.setTimeout(() => {
-      const choice = chooseAIMove(state, difficulty);
+      const choice = chooseAIMove(state, effectiveDifficulty);
       setAiThinking(false);
       if (!choice) return;
       commitMove(choice.from, choice.to, choice.promotion);
@@ -148,7 +163,7 @@ export function CatChess() {
       setAiThinking(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, difficulty]);
+  }, [state, effectiveDifficulty]);
 
   useEffect(() => {
     if (state.status === "checkmate" || state.status === "stalemate") return;
@@ -187,7 +202,7 @@ export function CatChess() {
   function handleSquareClick(r: number, c: number) {
     if (state.status === "checkmate" || state.status === "stalemate") return;
     if (pendingPromo) return;
-    if (difficulty !== "off" && state.turn === aiColor) return;
+    if (effectiveDifficulty !== "off" && state.turn === aiColor) return;
     const piece = state.board[r][c];
     if (selected) {
       if (selected[0] === r && selected[1] === c) {
@@ -293,7 +308,10 @@ export function CatChess() {
         </div>
 
         <aside className="w-full shrink-0 space-y-4 lg:w-80">
-          <DifficultySelect value={difficulty} onChange={setDifficulty} />
+          <ModeSelect value={mode} onChange={setMode} />
+          {mode === "computer" && (
+            <DifficultySelect value={difficulty} onChange={setDifficulty} />
+          )}
           <div className="grid grid-cols-2 gap-3">
             <TimerCard label="White" time={whiteTime} active={state.turn === "w"} />
             <TimerCard label="Black" time={blackTime} active={state.turn === "b"} dark />
@@ -438,7 +456,7 @@ function FragmentRow({
                 draggable={false}
                 className={[
                   "pointer-events-none absolute inset-0 h-full w-full select-none object-contain p-[6%] drop-shadow-sm",
-                  isLastTo ? "cat-pop" : "cat-idle",
+                  isLastTo ? "cat-pop" : "",
                 ].join(" ")}
               />
             )}
@@ -609,7 +627,6 @@ function DifficultySelect({
   onChange: (d: Difficulty) => void;
 }) {
   const opts: { id: Difficulty; label: string; hint: string }[] = [
-    { id: "off", label: "2 Players", hint: "No AI" },
     { id: "easy", label: "Kitten", hint: "Random" },
     { id: "medium", label: "Cat", hint: "Greedy" },
     { id: "hard", label: "Tiger", hint: "Depth 3" },
@@ -618,13 +635,11 @@ function DifficultySelect({
     <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-border">
       <div className="mb-2 flex items-center justify-between">
         <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Opponent
+          Difficulty
         </div>
-        {value !== "off" && (
-          <span className="text-[0.65rem] font-semibold text-paw">AI plays Black</span>
-        )}
+        <span className="text-[0.65rem] font-semibold text-paw">AI plays Black</span>
       </div>
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-3 gap-1.5">
         {opts.map((o) => {
           const active = value === o.id;
           return (
@@ -641,6 +656,49 @@ function DifficultySelect({
             >
               <span>{o.label}</span>
               <span className={["text-[0.6rem] font-normal", active ? "opacity-90" : "opacity-60"].join(" ")}>
+                {o.hint}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ModeSelect({
+  value,
+  onChange,
+}: {
+  value: GameMode;
+  onChange: (m: GameMode) => void;
+}) {
+  const opts: { id: GameMode; label: string; hint: string }[] = [
+    { id: "friend", label: "👥 Play a Friend", hint: "Two players, same device" },
+    { id: "computer", label: "🤖 Play vs Computer", hint: "AI opponent" },
+  ];
+  return (
+    <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-border">
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Game Mode
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {opts.map((o) => {
+          const active = value === o.id;
+          return (
+            <button
+              key={o.id}
+              onClick={() => onChange(o.id)}
+              title={o.hint}
+              className={[
+                "flex flex-col items-center rounded-lg px-2 py-3 text-xs font-semibold transition",
+                active
+                  ? "bg-paw text-paw-foreground shadow-sm"
+                  : "bg-secondary text-secondary-foreground hover:bg-accent",
+              ].join(" ")}
+            >
+              <span>{o.label}</span>
+              <span className={["mt-0.5 text-[0.6rem] font-normal", active ? "opacity-90" : "opacity-60"].join(" ")}>
                 {o.hint}
               </span>
             </button>
