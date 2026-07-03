@@ -22,6 +22,7 @@ type GameMode = "friend" | "computer";
 const THEME_KEY = "catChess.theme";
 const DIFFICULTY_KEY = "catChess.difficulty";
 const MODE_KEY = "catChess.mode";
+const PLAYER_COLOR_KEY = "catChess.playerColor";
 
 function loadTheme(): CatTheme {
   if (typeof window === "undefined") return "classic";
@@ -37,6 +38,11 @@ function loadMode(): GameMode {
   if (typeof window === "undefined") return "friend";
   const v = window.localStorage.getItem(MODE_KEY);
   return v === "computer" || v === "friend" ? v : "friend";
+}
+function loadPlayerColor(): Color {
+  if (typeof window === "undefined") return "w";
+  const v = window.localStorage.getItem(PLAYER_COLOR_KEY);
+  return v === "b" ? "b" : "w";
 }
 
 /**
@@ -109,14 +115,15 @@ export function CatChess() {
   const [blackTime, setBlackTime] = useState(600);
   const [theme, setTheme] = useState<CatTheme>(loadTheme);
   const [mode, setMode] = useState<GameMode>(loadMode);
+  const [playerColor, setPlayerColor] = useState<Color>(loadPlayerColor);
   const [difficulty, setDifficulty] = useState<Difficulty>(() => {
     const d = loadDifficulty();
     return d === "off" ? "easy" : d;
   });
   const effectiveDifficulty: Difficulty = mode === "friend" ? "off" : difficulty;
   const [aiThinking, setAiThinking] = useState(false);
-  // AI plays Black when enabled.
-  const aiColor: Color = "b";
+  // In computer mode, AI plays the opposite color of the player.
+  const aiColor: Color = playerColor === "w" ? "b" : "w";
   const [pendingPromo, setPendingPromo] = useState<{
     from: [number, number];
     to: [number, number];
@@ -143,6 +150,9 @@ export function CatChess() {
   useEffect(() => {
     try { window.localStorage.setItem(MODE_KEY, mode); } catch { /* ignore */ }
   }, [mode]);
+  useEffect(() => {
+    try { window.localStorage.setItem(PLAYER_COLOR_KEY, playerColor); } catch { /* ignore */ }
+  }, [playerColor]);
 
   // AI move trigger
   useEffect(() => {
@@ -241,9 +251,16 @@ export function CatChess() {
   }
 
   function undo() {
-    setState((s) => undoMove(s));
     setSelected(null);
     setPendingPromo(null);
+    setCaptureFx([]);
+    setState((s) => {
+      // In computer mode, undo the AI's reply too so the human resumes their turn.
+      if (effectiveDifficulty !== "off" && s.turn === playerColor && s.history.length >= 2) {
+        return undoMove(undoMove(s));
+      }
+      return undoMove(s);
+    });
   }
 
   const capturedByWhite = state.captured.filter((p) => p.color === "b");
@@ -310,7 +327,23 @@ export function CatChess() {
         <aside className="w-full shrink-0 space-y-4 lg:w-80">
           <ModeSelect value={mode} onChange={setMode} />
           {mode === "computer" && (
-            <DifficultySelect value={difficulty} onChange={setDifficulty} />
+            <>
+              <SideSelect
+                value={playerColor}
+                onChange={(c) => {
+                  setPlayerColor(c);
+                  // Restart so the new side assignment starts fresh.
+                  setState(newGame());
+                  setSelected(null);
+                  setWhiteTime(600);
+                  setBlackTime(600);
+                  setPendingPromo(null);
+                  setCaptureFx([]);
+                  startedRef.current = false;
+                }}
+              />
+              <DifficultySelect value={difficulty} onChange={setDifficulty} />
+            </>
           )}
           <div className="grid grid-cols-2 gap-3">
             <TimerCard label="White" time={whiteTime} active={state.turn === "w"} />
@@ -439,9 +472,11 @@ function FragmentRow({
               "relative aspect-square w-full transition-colors",
               isLight ? "bg-board-light" : "bg-board-dark",
               isSelected ? "ring-4 ring-inset ring-paw/80" : "",
-              isLastFrom || isLastTo ? "shadow-[inset_0_0_0_3px_oklch(0.66_0.18_25/0.55)]" : "",
             ].join(" ")}
           >
+            {(isLastFrom || isLastTo) && (
+              <span className="pointer-events-none absolute inset-0 bg-yellow-300/45 mix-blend-multiply" />
+            )}
             {(isLastFrom || isLastTo) && (
               <span
                 key={`trail-${moveCount}-${isLastTo ? "t" : "f"}`}
@@ -637,7 +672,6 @@ function DifficultySelect({
         <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Difficulty
         </div>
-        <span className="text-[0.65rem] font-semibold text-paw">AI plays Black</span>
       </div>
       <div className="grid grid-cols-3 gap-1.5">
         {opts.map((o) => {
@@ -656,6 +690,49 @@ function DifficultySelect({
             >
               <span>{o.label}</span>
               <span className={["text-[0.6rem] font-normal", active ? "opacity-90" : "opacity-60"].join(" ")}>
+                {o.hint}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SideSelect({
+  value,
+  onChange,
+}: {
+  value: Color;
+  onChange: (c: Color) => void;
+}) {
+  const opts: { id: Color; label: string; hint: string }[] = [
+    { id: "w", label: "♙ Play as White", hint: "You move first" },
+    { id: "b", label: "♟ Play as Black", hint: "AI moves first" },
+  ];
+  return (
+    <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-border">
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Your Side
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {opts.map((o) => {
+          const active = value === o.id;
+          return (
+            <button
+              key={o.id}
+              onClick={() => onChange(o.id)}
+              title={o.hint}
+              className={[
+                "flex flex-col items-center rounded-lg px-2 py-2 text-xs font-semibold transition",
+                active
+                  ? "bg-paw text-paw-foreground shadow-sm"
+                  : "bg-secondary text-secondary-foreground hover:bg-accent",
+              ].join(" ")}
+            >
+              <span>{o.label}</span>
+              <span className={["mt-0.5 text-[0.6rem] font-normal", active ? "opacity-90" : "opacity-60"].join(" ")}>
                 {o.hint}
               </span>
             </button>
