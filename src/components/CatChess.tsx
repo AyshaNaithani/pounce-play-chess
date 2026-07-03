@@ -22,6 +22,7 @@ type GameMode = "friend" | "computer";
 const THEME_KEY = "catChess.theme";
 const DIFFICULTY_KEY = "catChess.difficulty";
 const MODE_KEY = "catChess.mode";
+const PLAYER_COLOR_KEY = "catChess.playerColor";
 
 function loadTheme(): CatTheme {
   if (typeof window === "undefined") return "classic";
@@ -37,6 +38,11 @@ function loadMode(): GameMode {
   if (typeof window === "undefined") return "friend";
   const v = window.localStorage.getItem(MODE_KEY);
   return v === "computer" || v === "friend" ? v : "friend";
+}
+function loadPlayerColor(): Color {
+  if (typeof window === "undefined") return "w";
+  const v = window.localStorage.getItem(PLAYER_COLOR_KEY);
+  return v === "b" ? "b" : "w";
 }
 
 /**
@@ -109,14 +115,15 @@ export function CatChess() {
   const [blackTime, setBlackTime] = useState(600);
   const [theme, setTheme] = useState<CatTheme>(loadTheme);
   const [mode, setMode] = useState<GameMode>(loadMode);
+  const [playerColor, setPlayerColor] = useState<Color>(loadPlayerColor);
   const [difficulty, setDifficulty] = useState<Difficulty>(() => {
     const d = loadDifficulty();
     return d === "off" ? "easy" : d;
   });
   const effectiveDifficulty: Difficulty = mode === "friend" ? "off" : difficulty;
   const [aiThinking, setAiThinking] = useState(false);
-  // AI plays Black when enabled.
-  const aiColor: Color = "b";
+  // In computer mode, AI plays the opposite color of the player.
+  const aiColor: Color = playerColor === "w" ? "b" : "w";
   const [pendingPromo, setPendingPromo] = useState<{
     from: [number, number];
     to: [number, number];
@@ -143,6 +150,9 @@ export function CatChess() {
   useEffect(() => {
     try { window.localStorage.setItem(MODE_KEY, mode); } catch { /* ignore */ }
   }, [mode]);
+  useEffect(() => {
+    try { window.localStorage.setItem(PLAYER_COLOR_KEY, playerColor); } catch { /* ignore */ }
+  }, [playerColor]);
 
   // AI move trigger
   useEffect(() => {
@@ -241,9 +251,16 @@ export function CatChess() {
   }
 
   function undo() {
-    setState((s) => undoMove(s));
     setSelected(null);
     setPendingPromo(null);
+    setCaptureFx([]);
+    setState((s) => {
+      // In computer mode, undo the AI's reply too so the human resumes their turn.
+      if (effectiveDifficulty !== "off" && s.turn === playerColor && s.history.length >= 2) {
+        return undoMove(undoMove(s));
+      }
+      return undoMove(s);
+    });
   }
 
   const capturedByWhite = state.captured.filter((p) => p.color === "b");
@@ -310,7 +327,23 @@ export function CatChess() {
         <aside className="w-full shrink-0 space-y-4 lg:w-80">
           <ModeSelect value={mode} onChange={setMode} />
           {mode === "computer" && (
-            <DifficultySelect value={difficulty} onChange={setDifficulty} />
+            <>
+              <SideSelect
+                value={playerColor}
+                onChange={(c) => {
+                  setPlayerColor(c);
+                  // Restart so the new side assignment starts fresh.
+                  setState(newGame());
+                  setSelected(null);
+                  setWhiteTime(600);
+                  setBlackTime(600);
+                  setPendingPromo(null);
+                  setCaptureFx([]);
+                  startedRef.current = false;
+                }}
+              />
+              <DifficultySelect value={difficulty} onChange={setDifficulty} />
+            </>
           )}
           <div className="grid grid-cols-2 gap-3">
             <TimerCard label="White" time={whiteTime} active={state.turn === "w"} />
