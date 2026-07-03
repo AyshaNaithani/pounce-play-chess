@@ -472,9 +472,11 @@ function FragmentRow({
               "relative aspect-square w-full transition-colors",
               isLight ? "bg-board-light" : "bg-board-dark",
               isSelected ? "ring-4 ring-inset ring-paw/80" : "",
-              isLastFrom || isLastTo ? "shadow-[inset_0_0_0_3px_oklch(0.66_0.18_25/0.55)]" : "",
             ].join(" ")}
           >
+            {(isLastFrom || isLastTo) && (
+              <span className="pointer-events-none absolute inset-0 bg-yellow-300/45 mix-blend-multiply" />
+            )}
             {(isLastFrom || isLastTo) && (
               <span
                 key={`trail-${moveCount}-${isLastTo ? "t" : "f"}`}
@@ -670,7 +672,6 @@ function DifficultySelect({
         <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Difficulty
         </div>
-        <span className="text-[0.65rem] font-semibold text-paw">AI plays Black</span>
       </div>
       <div className="grid grid-cols-3 gap-1.5">
         {opts.map((o) => {
@@ -689,6 +690,49 @@ function DifficultySelect({
             >
               <span>{o.label}</span>
               <span className={["text-[0.6rem] font-normal", active ? "opacity-90" : "opacity-60"].join(" ")}>
+                {o.hint}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SideSelect({
+  value,
+  onChange,
+}: {
+  value: Color;
+  onChange: (c: Color) => void;
+}) {
+  const opts: { id: Color; label: string; hint: string }[] = [
+    { id: "w", label: "♙ Play as White", hint: "You move first" },
+    { id: "b", label: "♟ Play as Black", hint: "AI moves first" },
+  ];
+  return (
+    <div className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-border">
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Your Side
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {opts.map((o) => {
+          const active = value === o.id;
+          return (
+            <button
+              key={o.id}
+              onClick={() => onChange(o.id)}
+              title={o.hint}
+              className={[
+                "flex flex-col items-center rounded-lg px-2 py-2 text-xs font-semibold transition",
+                active
+                  ? "bg-paw text-paw-foreground shadow-sm"
+                  : "bg-secondary text-secondary-foreground hover:bg-accent",
+              ].join(" ")}
+            >
+              <span>{o.label}</span>
+              <span className={["mt-0.5 text-[0.6rem] font-normal", active ? "opacity-90" : "opacity-60"].join(" ")}>
                 {o.hint}
               </span>
             </button>
