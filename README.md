@@ -1,12 +1,8 @@
-Haan yrr 😭 **GitHub README ke liye sirf plain text** chahiye, no fancy formatting/writing block. Ye direct `README.txt` mein paste kar dena:
 
-```text
 PURRECT BOARD BATTLES - CAT CHESS
 
 A fun and interactive chess game that combines the classic game of chess with a cute cat-themed design.
 
-LIVE DEMO:
-https://purrfect-board-battles.lovable.app/
 
 FEATURES:
 
@@ -86,4 +82,4 @@ PROJECT NAME:
 Purrfect Board Battles - Cat Chess
 
 Made with love for chess and cat lovers.
-```
+
